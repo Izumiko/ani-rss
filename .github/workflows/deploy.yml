@@ -2,17 +2,19 @@ name: deploy
 
 on:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
         with:
           java-version: '17'
-          distribution: 'temurin'
+          distribution: 'graalvm-community'
           cache: maven
+
       - name: Build with Project
         run: |
           bash ./package.sh
@@ -23,8 +25,8 @@ jobs:
           jq --arg content "$(cat UPDATE.md)" '. += {markdown: $content}' info.json > temp.json && mv temp.json info.json
 
           echo "$(cat info.json)"
-
           echo "version=v$version" >> $GITHUB_ENV
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
@@ -38,22 +40,27 @@ jobs:
             ./ani-rss-application/target/ani-rss.jar.md5
             ./ani-rss-application/target/ani-rss.exe
             ./ani-rss-application/target/ani-rss.exe.md5
+            ./ani-rss-application/target/ani-rss-application
+            ./ani-rss-application/target/lib*.so
             ./info.json
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      - name: Build and push Docker image (temurin)
+
+      - name: Build and push Docker image (native)
         uses: docker/build-push-action@v6
         with:
           context: ./
           file: ./docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
-          tags: izumiko/ani-rss:latest,izumiko/ani-rss:${{ env.version }}
-
+          tags: izumiko/ani-rss:latest-native,izumiko/ani-rss:${{ env.version }}-native
